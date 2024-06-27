@@ -147,7 +147,11 @@ def lambda_handler(event, context):
     
         response = ec2.describe_vpcs()
         vpcs = ["vpc-077e3872c3c662828"]  # List of VPC IDs to process
-        for vpc_id in vpcs:
+        vpcs = response.get('Vpcs', []) #uncomment it
+        #vpcs = ["vpc-05999aa1be45ff7ac"] # comment it
+        for vpc in vpcs:
+            vpc_id = vpc['VpcId'] #uncommnt it
+            #vpc_id = vpcs[0] #comment it
             print(f"Processing VPC {vpc_id} in region {region}")
     
             # Step 1: Enable IPv6 CIDR for the VPC if not already enabled
