@@ -140,27 +140,39 @@ def lambda_handler(event, context):
     """
     session = boto3.Session()
     ec2_regions = ["us-east-1"]  # Specify the regions to process
+    vpc_id = "vpc-0ab6901756ac46d27"  # Hardcoded VPC ID for testing
+
+    if not vpc_id:
+        raise ValueError("VPC ID must be provided and cannot be None")
+
+    product_tag_key = event.get('tag_key', "product")  # Get tag key from the event input
+    product_tag_value = event.get('tag_value', "landmark21")  # Get tag value from the event input
+
     for region in ec2_regions:
         print(f"Processing region: {region}")
         ec2 = boto3.client('ec2', region_name=region)
-        elbv2 = boto3.client('elbv2', region_name=region)
     
-        response = ec2.describe_vpcs()
-        vpcs = ["vpc-077e3872c3c662828"]  # List of VPC IDs to process
-        vpcs = response.get('Vpcs', []) #uncomment it
-        #vpcs = ["vpc-05999aa1be45ff7ac"] # comment it
-        for vpc in vpcs:
-            vpc_id = vpc['VpcId'] #uncommnt it
-            #vpc_id = vpcs[0] #comment it
-            print(f"Processing VPC {vpc_id} in region {region}")
+        # Describe the specific VPC
+        response = ec2.describe_vpcs(VpcIds=[vpc_id])
+        
+        if response['Vpcs']:
+            vpc = response['Vpcs'][0]
+            tags = vpc.get('Tags', [])
+            product_tag = next((tag['Value'] for tag in tags if tag['Key'] == product_tag_key), None)
+            if product_tag == product_tag_value:
+                print(f"Processing VPC {vpc_id} in region {region} with product tag {product_tag_value}")
     
-            # Step 1: Enable IPv6 CIDR for the VPC if not already enabled
-            ipv6_cidr_block = enable_ipv6_cidr_for_vpc(ec2, vpc_id)
+                # Step 1: Enable IPv6 CIDR for the VPC if not already enabled
+                ipv6_cidr_block = enable_ipv6_cidr_for_vpc(ec2, vpc_id)
     
-            # Step 2: Assign IPv6 CIDR range to all subnets from the CIDR range of the VPC
-            assign_ipv6_cidr_to_subnets(ec2, vpc_id, ipv6_cidr_block)
+                # Step 2: Assign IPv6 CIDR range to all subnets from the CIDR range of the VPC
+                assign_ipv6_cidr_to_subnets(ec2, vpc_id, ipv6_cidr_block)
     
-            # Step 3: Create egress-only internet gateway if not present and attach it to private subnets
-            create_and_attach_egress_only_igw(ec2, vpc_id)
-    
+                # Step 3: Create egress-only internet gateway if not present and attach it to private subnets
+                create_and_attach_egress_only_igw(ec2, vpc_id)
+            else:
+                print(f"Skipping VPC {vpc_id} in region {region} as it does not match the product tag {product_tag_value}")
+        else:
+            print(f"VPC {vpc_id} not found in region {region}")
+
     print("Completed processing all regions.")
